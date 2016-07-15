@@ -70,6 +70,22 @@ public class RestServerTestBase extends AbstractInfinispanTest {
       }
    }
 
+   public void startServer(String name) throws Exception {
+      try {
+         servers.get(name).start();
+      } catch (Exception e) {
+         throw new IllegalStateException("No servers defined!");
+      }
+   }
+
+   public void stopServer(String name) throws Exception {
+      try {
+         servers.get(name).stop();
+      } catch (Exception e) {
+         throw new IllegalStateException("No servers defined!");
+      }
+   }
+
    public void stopServers() throws Exception {
       if (!servers.isEmpty()) {
          for (NettyRestServer s : servers.values())

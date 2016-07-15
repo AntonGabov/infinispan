@@ -6,22 +6,24 @@ import javax.ws.rs.container.{ContainerRequestFilter, ContainerResponseFilter}
 import org.infinispan.commons.api.Lifecycle
 import org.infinispan.manager.{DefaultCacheManager, EmbeddedCacheManager}
 import org.infinispan.rest.configuration.{RestServerConfiguration, RestServerConfigurationBuilder}
-import org.infinispan.rest.logging.{RestAccessLoggingHandler, Log}
+import org.infinispan.rest.logging.{Log, RestAccessLoggingHandler}
+import org.infinispan.rest.topology.TopologyProxy
 import org.infinispan.server.core.CacheIgnoreAware
 import org.jboss.resteasy.plugins.server.netty.NettyJaxrsServer
 import org.jboss.resteasy.spi.ResteasyDeployment
+
 import scala.collection.JavaConversions._
 
 final class NettyRestServer (
       val cacheManager: EmbeddedCacheManager, val configuration: RestServerConfiguration,
-      netty: NettyJaxrsServer, onStop: EmbeddedCacheManager => Unit) extends Lifecycle with Log with CacheIgnoreAware {
+      netty: NettyJaxrsServer, onStop: EmbeddedCacheManager => Unit, topologyProxy: TopologyProxy) extends Lifecycle with Log with CacheIgnoreAware {
 
    override def start(): Unit = {
       netty.start()
       val deployment = netty.getDeployment
       configuration.getIgnoredCaches.foreach(ignoreCache)
       val restCacheManager = new RestCacheManager(cacheManager, isCacheIgnored)
-      val server = new Server(configuration, restCacheManager)
+      val server = new Server(configuration, restCacheManager, topologyProxy)
       deployment.getRegistry.addSingletonResource(server)
       deployment.getProviderFactory.register(new RestAccessLoggingHandler, classOf[ContainerResponseFilter],
          classOf[ContainerRequestFilter])
@@ -30,6 +32,7 @@ final class NettyRestServer (
 
    override def stop(): Unit = {
       netty.stop()
+      topologyProxy.removeServerConfiguration(configuration)
       onStop(cacheManager)
    }
 
@@ -56,12 +59,13 @@ object NettyRestServer extends Log {
 
       val netty = new NettyJaxrsServer()
       val deployment = new ResteasyDeployment()
+      val topologyProxy = new TopologyProxy(cm, config)
       netty.setDeployment(deployment)
       netty.setHostname(config.host())
       netty.setPort(config.port())
       netty.setRootResourcePath("")
       netty.setSecurityDomain(null)
-      new NettyRestServer(cm, config, netty, onStop)
+      new NettyRestServer(cm, config, netty, onStop, topologyProxy)
    }
 
    private def createCacheManager(cfgFile: String): EmbeddedCacheManager = {

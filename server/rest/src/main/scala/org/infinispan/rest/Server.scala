@@ -2,25 +2,29 @@ package org.infinispan.rest
 
 import com.thoughtworks.xstream.XStream
 import java.io._
-import java.util.{TimeZone, Locale, Date}
+import java.util.{Date, Locale, TimeZone}
 import java.util.concurrent.TimeUnit.{MILLISECONDS => MILLIS}
 import java.util.concurrent.TimeUnit.{SECONDS => SECS}
 import javax.ws.rs._
 import core._
 import core.Response.{ResponseBuilder, Status}
+
 import org.codehaus.jackson.map.ObjectMapper
 import org.infinispan.AdvancedCache
 import org.infinispan.commons.CacheException
 import org.infinispan.commons.hash.MurmurHash3
 import javax.ws.rs._
 import javax.servlet.http.HttpServletResponse
+
 import scala.collection.JavaConverters._
 import scala.xml.Utility
 import org.infinispan.container.entries.InternalCacheEntry
-import org.infinispan.rest.configuration.{RestServerConfiguration, ExtendedHeaders}
+import org.infinispan.rest.configuration.{ExtendedHeaders, RestServerConfiguration}
 import org.infinispan.configuration.cache.Configuration
 import org.infinispan.metadata.Metadata
 import java.text.SimpleDateFormat
+
+import org.infinispan.rest.topology.TopologyProxy
 import org.jboss.resteasy.util.HttpHeaderNames
 
 /**
@@ -31,7 +35,7 @@ import org.jboss.resteasy.util.HttpHeaderNames
  * @since 4.0
  */
 @Path("/rest")
-class Server(configuration: RestServerConfiguration, manager: RestCacheManager) {
+class Server(configuration: RestServerConfiguration, manager: RestCacheManager, topologyProxy: TopologyProxy) {
 
    @GET
    @Path("/{cacheName}")
@@ -85,7 +89,8 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager) 
                 @PathParam("cacheName") cacheName: String,
                 @PathParam("cacheKey") key: String,
                 @QueryParam("extended") extended: String,
-                @DefaultValue("") @HeaderParam("Cache-Control") cacheControl: String): Response = {
+                @DefaultValue("") @HeaderParam("Cache-Control") cacheControl: String,
+                @HeaderParam("Topology-Id") topologyId: Int): Response = {
       protectCacheNotFound(request, useAsync) { (request, useAsync) =>
          manager.getInternalEntry(cacheName, key) match {
             case ice: InternalCacheEntry[String, V] => {
@@ -95,9 +100,9 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager) 
                ensureFreshEnoughEntry(expires, minFreshSeconds) {
                   ice.getMetadata match {
                      case meta: MimeMetadata =>
-                        getMimeEntry(request, ice, meta, lastMod, expires, cacheName, extended)
+                        getMimeEntry(request, ice, meta, lastMod, expires, cacheName, extended, topologyId)
                      case meta: Metadata =>
-                        getAnyEntry(request, ice, meta, lastMod, expires, cacheName, extended)
+                        getAnyEntry(request, ice, meta, lastMod, expires, cacheName, extended, topologyId)
                   }
                }
             }
@@ -132,41 +137,41 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager) 
    }
 
    private def getMimeEntry[V](request: Request, ice: InternalCacheEntry[String, V], meta: MimeMetadata,
-           lastMod: Date, expires: Date, cacheName: String, extended: String): Response = {
+           lastMod: Date, expires: Date, cacheName: String, extended: String, topologyId: Int): Response = {
       val key = ice.getKey
       request.evaluatePreconditions(lastMod, calcETAG(ice, meta)) match {
          case bldr: ResponseBuilder => bldr.build
-         case null => Response.ok(ice.getValue, meta.contentType)
+         case null => addHeadersToResponse(Response.ok(ice.getValue, meta.contentType)
                  .header(HttpHeaderNames.LAST_MODIFIED, formatDate(lastMod))
                   //workaround for https://issues.jboss.org/browse/RESTEASY-887
                  .header(HttpHeaderNames.EXPIRES, formatDate(expires))
                  .cacheControl(calcCacheControl(expires))
                  .mortality(meta)
                  .tag(calcETAG(ice, meta))
-                 .extended(cacheName, key, wantExtendedHeaders(extended)).build
+                 .extended(cacheName, key, wantExtendedHeaders(extended)), topologyId).build
       }
    }
 
    private def getAnyEntry[V](request: Request, ice: InternalCacheEntry[String, V], meta: Metadata,
-         lastMod: Date, expires: Date, cacheName: String, extended: String): Response = {
+         lastMod: Date, expires: Date, cacheName: String, extended: String, topologyId: Int): Response = {
       val key = ice.getKey
       ice.getValue match {
 
-         case s: String => Response.ok(s, MediaType.TEXT_PLAIN)
+         case s: String => addHeadersToResponse(Response.ok(s, MediaType.TEXT_PLAIN)
                            .header(HttpHeaderNames.LAST_MODIFIED, formatDate(lastMod))
                            .cacheControl(calcCacheControl(expires))
                            .header(HttpHeaderNames.EXPIRES, formatDate(expires))
-                           .mortality(meta)
+                           .mortality(meta), topologyId)
                            .build
 
-         case ba: Array[Byte] => Response.ok
+         case ba: Array[Byte] => addHeadersToResponse(Response.ok
                                  .`type`(MediaType.APPLICATION_OCTET_STREAM)
                                  .header(HttpHeaderNames.LAST_MODIFIED, formatDate(lastMod))
                                  .header(HttpHeaderNames.EXPIRES, formatDate(expires))
                                  .cacheControl(calcCacheControl(expires))
                                  .mortality(meta)
                                  .extended(cacheName, key, wantExtendedHeaders(extended))
-                                 .entity(streamIt(_.write(ba)))
+                                 .entity(streamIt(_.write(ba))), topologyId)
                                  .build
          case obj: Any => {
             val variant = request.selectVariant(Server.VariantList)
@@ -175,34 +180,34 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager) 
 
             // For objects other than String or byte arrays, accept only JSON, XML and X_JAVA_SERIALIZABLE_OBJECT
             selectedMediaType match {
-               case MediaType.APPLICATION_JSON => Response.ok
+               case MediaType.APPLICATION_JSON => addHeadersToResponse(Response.ok
                        .`type`(selectedMediaType)
                        .header(HttpHeaderNames.LAST_MODIFIED, formatDate(lastMod))
                        .header(HttpHeaderNames.EXPIRES, formatDate(expires))
                        .cacheControl(calcCacheControl(expires))
                        .mortality(meta)
                        .extended(cacheName, key, wantExtendedHeaders(extended))
-                       .entity(streamIt(Server.JsonMapper.writeValue(_, obj)))
+                       .entity(streamIt(Server.JsonMapper.writeValue(_, obj))), topologyId)
                        .build
-               case MediaType.APPLICATION_XML => Response.ok
+               case MediaType.APPLICATION_XML => addHeadersToResponse(Response.ok
                        .`type`(selectedMediaType)
                        .header(HttpHeaderNames.LAST_MODIFIED, formatDate(lastMod))
                        .header(HttpHeaderNames.EXPIRES, formatDate(expires))
                        .cacheControl(calcCacheControl(expires))
                        .mortality(meta)
                        .extended(cacheName, key, wantExtendedHeaders(extended))
-                       .entity(streamIt(Server.Xstream.toXML(obj, _)))
+                       .entity(streamIt(Server.Xstream.toXML(obj, _))), topologyId)
                        .build
                case Server.ApplicationXJavaSerializedObject =>
                   obj match {
-                     case ser: Serializable => Response.ok
+                     case ser: Serializable => addHeadersToResponse(Response.ok
                              .`type`(selectedMediaType)
                              .header(HttpHeaderNames.LAST_MODIFIED, formatDate(lastMod))
                              .header(HttpHeaderNames.EXPIRES, formatDate(expires))
                              .cacheControl(calcCacheControl(expires))
                              .mortality(meta)
                              .extended(cacheName, key, wantExtendedHeaders(extended))
-                             .entity(streamIt(new ObjectOutputStream(_).writeObject(ser)))
+                             .entity(streamIt(new ObjectOutputStream(_).writeObject(ser))), topologyId)
                              .build
                      case _ => Response.notAcceptable(Server.VariantList).build
                   }
@@ -340,7 +345,8 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager) 
                 @PathParam("cacheName") cacheName: String, @PathParam("cacheKey") key: String,
                 @HeaderParam("Content-Type") mediaType: String, data: Array[Byte],
                 @DefaultValue("-1") @HeaderParam("timeToLiveSeconds") ttl: Long,
-                @DefaultValue("-1") @HeaderParam("maxIdleTimeSeconds") idleTime: Long): Response = {
+                @DefaultValue("-1") @HeaderParam("maxIdleTimeSeconds") idleTime: Long,
+                @HeaderParam("Topology-Id") topologyId: Int): Response = {
       protectCacheNotFound(request, useAsync) { (request, useAsync) =>
          val cache = manager.getCache(cacheName)
          if (request.getMethod == "POST" && cache.containsKey(key)) {
@@ -358,14 +364,14 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager) 
                            case bldr: ResponseBuilder => bldr.build
                            // Preconditions passed
                            case null => putInCache(useAsync, cache, key, data, mediaType,
-                              ttl, idleTime, Some(ice.getValue.asInstanceOf[Array[Byte]]))
+                              ttl, idleTime, Some(ice.getValue.asInstanceOf[Array[Byte]]), topologyId)
                         }
                      case _ =>
-                        putInCache(useAsync, cache, key, data, mediaType, ttl, idleTime, None)
+                        putInCache(useAsync, cache, key, data, mediaType, ttl, idleTime, None, topologyId)
                   }
                }
                case _ =>
-                  putInCache(useAsync, cache, key, data, mediaType, ttl, idleTime, None)
+                  putInCache(useAsync, cache, key, data, mediaType, ttl, idleTime, None, topologyId)
             }
          }
       }
@@ -373,19 +379,19 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager) 
 
    private def putInCache(useAsync: Boolean, cache: AdvancedCache[String, Array[Byte]], key: String,
            data: Array[Byte], dataType: String, ttl: Long, idleTime: Long,
-           prevCond: Option[Array[Byte]]): Response = {
+           prevCond: Option[Array[Byte]], topologyId: Int): Response = {
       if (useAsync)
-         asyncPutInCache(cache, key, data, dataType, ttl, idleTime)
+         asyncPutInCache(cache, key, data, dataType, ttl, idleTime, topologyId)
       else
-         putOrReplace(cache, key, data, dataType, ttl, idleTime, prevCond)
+         putOrReplace(cache, key, data, dataType, ttl, idleTime, prevCond, topologyId)
    }
 
    def asyncPutInCache(cache: AdvancedCache[String, Array[Byte]],
            key: String, data: Array[Byte], dataType: String,
-           ttl: Long, idleTime: Long): Response = {
+           ttl: Long, idleTime: Long, topologyId: Int): Response = {
       val metadata = createMetadata(cache.getCacheConfiguration, dataType, ttl, idleTime)
       cache.putAsync(key, data, metadata)
-      Response.ok.build
+      buildOkResponse(topologyId)
    }
 
    def createMetadata(cfg: Configuration, dataType: String, ttl: Long, idleTime: Long): Metadata = {
@@ -411,16 +417,16 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager) 
    private def putOrReplace(cache: AdvancedCache[String, Array[Byte]],
            key: String, data: Array[Byte], dataType: String,
            ttl: Long, idleTime: Long,
-           prevCond: Option[Array[Byte]]): Response = {
+           prevCond: Option[Array[Byte]], topologyId: Int): Response = {
       val metadata = createMetadata(cache.getCacheConfiguration, dataType, ttl, idleTime)
       prevCond match {
          case None =>
             cache.put(key, data, metadata)
-            Response.ok.build
+            buildOkResponse(topologyId)
          case Some(prev) =>
             val replaced = cache.replace(key, prev, data, metadata)
             // If not replaced, simply send back that the precondition failed
-            if (replaced) Response.ok.build
+            if (replaced) buildOkResponse(topologyId)
             else Response.status(
                HttpServletResponse.SC_PRECONDITION_FAILED).build()
       }
@@ -502,6 +508,28 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager) 
       }
    }
 
+   /**
+     * Build OK HTTP Response with additional http headers
+     * @param topologyId
+     * @return Response
+    */
+   private def buildOkResponse(topologyId: Int): Response = {
+      addHeadersToResponse(Response.ok, topologyId).build()
+   }
+
+   /**
+     * Add additional http headers to ResponseBuilder
+     * @param topologyId
+     * @return Response
+     */
+   private def addHeadersToResponse(responseBuilder: ResponseBuilder, topologyId: Int): ResponseBuilder = {
+      if (topologyId == 0 || topologyId == topologyProxy.getTopologyId) {
+         responseBuilder
+      } else {
+         responseBuilder.header(Server.TopologyIdHeader, topologyProxy.getTopologyInfo)
+      }
+   }
+
 }
 
 object Server {
@@ -511,6 +539,7 @@ object Server {
    val ApplicationXJavaSerializedObject = ApplicationXJavaSerializedObjectType.toString
    val TimeToLiveHeader = "timeToLiveSeconds"
    val MaxIdleTimeHeader = "maxIdleTimeSeconds"
+   val TopologyIdHeader = "Topology-Id"
 
    /**For dealing with binary entries in the cache */
    lazy val VariantList = Variant.VariantListBuilder.newInstance.mediaTypes(
