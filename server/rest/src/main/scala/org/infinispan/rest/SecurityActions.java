@@ -1,8 +1,10 @@
 package org.infinispan.rest;
 
 import org.infinispan.manager.EmbeddedCacheManager;
+import org.infinispan.notifications.Listenable;
 import org.infinispan.security.Security;
 import org.infinispan.security.actions.GetCacheAction;
+import org.infinispan.security.actions.RemoveListenerAction;
 
 import java.security.AccessController;
 import java.security.PrivilegedAction;
@@ -29,6 +31,11 @@ final class SecurityActions {
     static <K, V> org.infinispan.Cache<K, V> getCache(final EmbeddedCacheManager cacheManager, String cacheName) {
         GetCacheAction action = new GetCacheAction(cacheManager, cacheName);
         return (org.infinispan.Cache<K, V>) doPrivileged(action);
+    }
+
+    static Void removeListener(Listenable listenable, Object listener) {
+        RemoveListenerAction action = new RemoveListenerAction(listenable, listener);
+        return doPrivileged(action);
     }
 
 }

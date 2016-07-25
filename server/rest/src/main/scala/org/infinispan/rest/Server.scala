@@ -1,31 +1,28 @@
 package org.infinispan.rest
 
-import com.thoughtworks.xstream.XStream
 import java.io._
+import java.text.SimpleDateFormat
+import java.util.concurrent.TimeUnit.{MILLISECONDS => MILLIS, SECONDS => SECS}
 import java.util.{Date, Locale, TimeZone}
-import java.util.concurrent.TimeUnit.{MILLISECONDS => MILLIS}
-import java.util.concurrent.TimeUnit.{SECONDS => SECS}
+import javax.servlet.http.HttpServletResponse
 import javax.ws.rs._
-import core._
-import core.Response.{ResponseBuilder, Status}
+import javax.ws.rs.core.Response.{ResponseBuilder, Status}
+import javax.ws.rs.core._
 
+import com.thoughtworks.xstream.XStream
 import org.codehaus.jackson.map.ObjectMapper
-import org.infinispan.AdvancedCache
+import org.infinispan.{AdvancedCache, Cache}
 import org.infinispan.commons.CacheException
 import org.infinispan.commons.hash.MurmurHash3
-import javax.ws.rs._
-import javax.servlet.http.HttpServletResponse
+import org.infinispan.configuration.cache.Configuration
+import org.infinispan.container.entries.InternalCacheEntry
+import org.infinispan.metadata.Metadata
+import org.infinispan.remoting.transport.Address
+import org.infinispan.rest.configuration.{ExtendedHeaders, RestServerConfiguration}
+import org.jboss.resteasy.util.HttpHeaderNames
 
 import scala.collection.JavaConverters._
 import scala.xml.Utility
-import org.infinispan.container.entries.InternalCacheEntry
-import org.infinispan.rest.configuration.{ExtendedHeaders, RestServerConfiguration}
-import org.infinispan.configuration.cache.Configuration
-import org.infinispan.metadata.Metadata
-import java.text.SimpleDateFormat
-
-import org.infinispan.rest.topology.TopologyProxy
-import org.jboss.resteasy.util.HttpHeaderNames
 
 /**
  * Integration server linking REST requests with Infinispan calls.
@@ -35,7 +32,7 @@ import org.jboss.resteasy.util.HttpHeaderNames
  * @since 4.0
  */
 @Path("/rest")
-class Server(configuration: RestServerConfiguration, manager: RestCacheManager, topologyProxy: TopologyProxy) {
+class Server(configuration: RestServerConfiguration, manager: RestCacheManager, addressCache: Cache[Address, String]) {
 
    @GET
    @Path("/{cacheName}")
@@ -523,11 +520,32 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager, 
      * @return Response
      */
    private def addHeadersToResponse(responseBuilder: ResponseBuilder, topologyId: Int): ResponseBuilder = {
-      if (topologyId == 0 || topologyId == topologyProxy.getTopologyId) {
+      val currentTopologyId: Int = addressCache.getAdvancedCache.getComponentRegistry.getStateTransferManager.getCacheTopology.getTopologyId
+
+      if (topologyId == 0 || topologyId.equals(currentTopologyId)) {
          responseBuilder
       } else {
-         responseBuilder.header(Server.TopologyIdHeader, topologyProxy.getTopologyInfo)
+         responseBuilder.header(Server.TopologyIdHeader, formTopologyInfo(currentTopologyId))
       }
+   }
+
+  /**
+    * Form topology info for HTTP header "Topology-Id" in the format: "Topology:id;host1:port1,host2:port2,..."
+    *
+    * @param topologyId
+    * @return
+    */
+   private def formTopologyInfo(topologyId: Int): String = {
+      val strTopologyId: String = "Topology:" + topologyId
+      val strAddressesBuilder: StringBuilder = new StringBuilder()
+      addressCache.values().asScala.foreach(address => {
+         if (strAddressesBuilder.length > 0) {
+            strAddressesBuilder.append(",")
+         }
+         strAddressesBuilder.append(address)
+      })
+
+      strTopologyId + ";" + strAddressesBuilder.toString()
    }
 
 }

@@ -1,5 +1,6 @@
 package org.infinispan.client.rest;
 
+import org.infinispan.commons.api.BasicCacheContainer;
 import org.infinispan.configuration.cache.CacheMode;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.infinispan.manager.EmbeddedCacheManager;
@@ -8,6 +9,7 @@ import org.infinispan.rest.configuration.RestServerConfigurationBuilder;
 import org.infinispan.test.AbstractCacheTest;
 import org.infinispan.test.TestingUtil;
 import org.infinispan.test.fwk.TestCacheManagerFactory;
+import org.infinispan.transaction.lookup.DummyTransactionManagerLookup;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
@@ -22,6 +24,18 @@ public class RestTestCluster extends RestServerTestBase {
 
    @BeforeClass
    public void setup() throws Exception {
+      ConfigurationBuilder cfgBuilder = AbstractCacheTest.getDefaultClusteredCacheConfig(CacheMode.DIST_SYNC, true);
+
+      EmbeddedCacheManager cm1 = TestCacheManagerFactory.createClusteredCacheManager(cfgBuilder);
+      addServer("1", cm1, new RestServerConfigurationBuilder().port(8080).build());
+
+      EmbeddedCacheManager cm2 = TestCacheManagerFactory.createClusteredCacheManager(cfgBuilder);
+      addServer("2", cm2, new RestServerConfigurationBuilder().port(8181).build());
+
+      startServers();
+      TestingUtil.blockUntilViewsReceived(10000, getCacheManager("1").getCache(DEFAULT_CACHE_NAME),
+              getCacheManager("2").getCache(DEFAULT_CACHE_NAME));
+
       setupClient();
    }
 
@@ -39,21 +53,7 @@ public class RestTestCluster extends RestServerTestBase {
       mng.stop();
    }
 
-   public void testGetAndPutRqsts() throws Exception {
-
-      ConfigurationBuilder cfgBuilder = AbstractCacheTest.getDefaultClusteredCacheConfig(CacheMode.REPL_SYNC, true);
-
-      EmbeddedCacheManager cm = TestCacheManagerFactory.createClusteredCacheManager(cfgBuilder);
-      addServer("0", cm, new RestServerConfigurationBuilder().port(8080).build());
-      startServer("0");
-
-      EmbeddedCacheManager cm2 = TestCacheManagerFactory.createClusteredCacheManager(cfgBuilder);
-      addServer("1", cm2, new RestServerConfigurationBuilder().port(8181).build());
-      startServer("1");
-
-      TestingUtil.blockUntilViewsReceived(10000, getCacheManager("0").getCache(DEFAULT_CACHE_NAME),
-              getCacheManager("1").getCache(DEFAULT_CACHE_NAME));
-
+   public void test2nodeCluster() throws Exception {
       String key1 = "Test1";
       String key2 = "Test2";
       String value1 = "Cool";

@@ -2,7 +2,6 @@ package org.infinispan.client.rest.impl.transport.operations;
 
 import org.infinispan.client.rest.configuration.ServerConfiguration;
 import org.infinispan.client.rest.impl.TopologyInfo;
-import org.infinispan.client.rest.impl.protocol.HttpHeaderNames;
 import org.infinispan.client.rest.impl.transport.http.HttpResponseHandler;
 import org.infinispan.client.rest.marshall.MarshallUtil;
 
@@ -23,6 +22,10 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpVersion;
+
+import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
+import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
+import static org.infinispan.client.rest.impl.protocol.HttpHeaderNames.TOPOLOGY_ID;
 
 public class HttpOperationsFactory {
    
@@ -66,8 +69,9 @@ public class HttpOperationsFactory {
 
       DefaultFullHttpRequest put = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.PUT, getUri(cacheName, key),
             content);
-      put.headers().add("Content-Length", content.readableBytes());
-      put.headers().add(HttpHeaderNames.TOPOLOGY_ID, topologyInfo.getTopologyId());
+      put.headers().add(CONTENT_TYPE, "application/octet-stream");
+      put.headers().add(CONTENT_LENGTH, content.readableBytes());
+      put.headers().add(TOPOLOGY_ID, topologyInfo.getTopologyId());
 
       HttpResponseHandler handler = new HttpResponseHandler();
       Channel ch = bootstrap.connect(server.getHost(), Integer.valueOf(server.getPort())).awaitUninterruptibly().channel().pipeline()
@@ -83,7 +87,8 @@ public class HttpOperationsFactory {
    
    public HttpResponse getRequest(TopologyInfo topologyInfo, ServerConfiguration server, Object cacheName, Object key, int maxContentLength) {
       DefaultHttpRequest get = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, getUri(cacheName, key));
-      get.headers().add(HttpHeaderNames.TOPOLOGY_ID, topologyInfo.getTopologyId());
+      get.headers().add(CONTENT_TYPE, "application/octet-stream");
+      get.headers().add(TOPOLOGY_ID, topologyInfo.getTopologyId());
       
       HttpResponseHandler handler = new HttpResponseHandler(true);
       Channel ch = bootstrap.connect(server.getHost(), Integer.valueOf(server.getPort())).awaitUninterruptibly().channel().pipeline()
