@@ -31,11 +31,24 @@ import scala.xml.Utility
  * @author Galder Zamarreño
  * @since 4.0
  */
-@Path("/rest")
+@Path("/")
 class Server(configuration: RestServerConfiguration, manager: RestCacheManager, addressCache: Cache[Address, String]) {
 
+  /**
+    * This GET request allows to notify client that server supports HTTP/2. If it isn't, server will send OK response.
+    * NOTE: IT ISN'T IMPLEMENTED YET!
+    * @param request
+    * @param upgrade
+    * @return
+    */
    @GET
-   @Path("/{cacheName}")
+   @Path("/")
+   def getUpgrade(@Context request: Request, @HeaderParam("Upgrade") upgrade: String): Response = {
+      Response.ok.build()
+   }
+
+   @GET
+   @Path("/rest/{cacheName}")
    def getKeys(@Context request: Request, @HeaderParam("performAsync") useAsync: Boolean,
          @PathParam("cacheName") cacheName: String, @QueryParam("global") globalKeySet: String): Response = {
       protectCacheNotFound(request, useAsync) { (request, useAsync) => {
@@ -81,7 +94,7 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager, 
    }
 
    @GET
-   @Path("/{cacheName}/{cacheKey}")
+   @Path("/rest/{cacheName}/{cacheKey}")
    def getEntry[V](@Context request: Request, @HeaderParam("performAsync") useAsync: Boolean,
                 @PathParam("cacheName") cacheName: String,
                 @PathParam("cacheKey") key: String,
@@ -293,7 +306,7 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager, 
    }
 
    @HEAD
-   @Path("/{cacheName}/{cacheKey}")
+   @Path("/rest/{cacheName}/{cacheKey}")
    def headEntry[V](@Context request: Request, @HeaderParam("performAsync") useAsync: Boolean,
                  @PathParam("cacheName") cacheName: String,
                  @PathParam("cacheKey") key: String,
@@ -337,7 +350,7 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager, 
 
    @PUT
    @POST
-   @Path("/{cacheName}/{cacheKey}")
+   @Path("/rest/{cacheName}/{cacheKey}")
    def putEntry[V](@Context request: Request, @HeaderParam("performAsync") useAsync: Boolean,
                 @PathParam("cacheName") cacheName: String, @PathParam("cacheKey") key: String,
                 @HeaderParam("Content-Type") mediaType: String, data: Array[Byte],
@@ -388,7 +401,7 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager, 
            ttl: Long, idleTime: Long, topologyId: Int): Response = {
       val metadata = createMetadata(cache.getCacheConfiguration, dataType, ttl, idleTime)
       cache.putAsync(key, data, metadata)
-      buildOkResponse(topologyId)
+      addHeadersToResponse(Response.ok, topologyId).build()
    }
 
    def createMetadata(cfg: Configuration, dataType: String, ttl: Long, idleTime: Long): Metadata = {
@@ -419,18 +432,18 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager, 
       prevCond match {
          case None =>
             cache.put(key, data, metadata)
-            buildOkResponse(topologyId)
+            addHeadersToResponse(Response.ok, topologyId).build()
          case Some(prev) =>
             val replaced = cache.replace(key, prev, data, metadata)
             // If not replaced, simply send back that the precondition failed
-            if (replaced) buildOkResponse(topologyId)
+            if (replaced) addHeadersToResponse(Response.ok, topologyId).build()
             else Response.status(
                HttpServletResponse.SC_PRECONDITION_FAILED).build()
       }
    }
 
    @DELETE
-   @Path("/{cacheName}/{cacheKey}")
+   @Path("/rest/{cacheName}/{cacheKey}")
    def removeEntry[V](@Context request: Request, @HeaderParam("performAsync") useAsync: Boolean,
          @PathParam("cacheName") cacheName: String, @PathParam("cacheKey") key: String): Response = {
       protectCacheNotFound(request, useAsync) { (request, useAsync) =>
@@ -470,7 +483,7 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager, 
    }
 
    @DELETE
-   @Path("/{cacheName}")
+   @Path("/rest/{cacheName}")
    def killCache(@PathParam("cacheName") cacheName: String,
                  @DefaultValue("") @HeaderParam("If-Match") ifMatch: String,
                  @DefaultValue("") @HeaderParam("If-None-Match") ifNoneMatch: String,
@@ -506,21 +519,15 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager, 
    }
 
    /**
-     * Build OK HTTP Response with additional http headers
-     * @param topologyId
-     * @return Response
-    */
-   private def buildOkResponse(topologyId: Int): Response = {
-      addHeadersToResponse(Response.ok, topologyId).build()
-   }
-
-   /**
      * Add additional http headers to ResponseBuilder
      * @param topologyId
      * @return Response
      */
    private def addHeadersToResponse(responseBuilder: ResponseBuilder, topologyId: Int): ResponseBuilder = {
-      val currentTopologyId: Int = addressCache.getAdvancedCache.getComponentRegistry.getStateTransferManager.getCacheTopology.getTopologyId
+      val currentTopologyId: Int = addressCache match {
+         case null => -1
+         case _ => addressCache.getAdvancedCache.getComponentRegistry.getStateTransferManager.getCacheTopology.getTopologyId
+      }
 
       if (topologyId == 0 || topologyId.equals(currentTopologyId)) {
          responseBuilder

@@ -10,6 +10,7 @@ import org.infinispan.client.rest.impl.TopologyInfo;
 import org.infinispan.client.rest.impl.protocol.HttpHeaderNames;
 import org.infinispan.client.rest.impl.transport.Transport;
 import org.infinispan.client.rest.impl.transport.operations.HttpOperationsFactory;
+import org.infinispan.client.rest.impl.transport.operations.Http2OperationsFactory;
 import org.infinispan.client.rest.marshall.MarshallUtil;
 
 import io.netty.buffer.ByteBuf;
@@ -26,7 +27,7 @@ public class HttpTransport implements Transport {
    private Configuration configuration;
    private List<ServerConfiguration> initialServers = new LinkedList<ServerConfiguration>();
    private volatile TopologyInfo topologyInfo;
-   private HttpOperationsFactory operations;
+   private Http2OperationsFactory operations;
 
    @Override
    public void start(Configuration configuration, int initialTopologyId) {
@@ -37,7 +38,7 @@ public class HttpTransport implements Transport {
    }
 
    private void setupOperations() {
-      operations = new HttpOperationsFactory();
+      operations = new Http2OperationsFactory(initialServers.get(0).getHost(), initialServers.get(0).getPort());
       operations.start();
    }
 
@@ -52,7 +53,8 @@ public class HttpTransport implements Transport {
    }
 
    private void write(ServerConfiguration server, Object cacheName, Object key, Object value) {
-      HttpResponse response = operations.putRequest(topologyInfo, server, cacheName, key, value);
+      // HttpResponse response = operations.putRequest(topologyInfo, server, cacheName, key, value);
+      FullHttpResponse response = operations.putRequest(topologyInfo, cacheName, key, value);
       if (response != null && HttpResponseStatus.OK.equals(response.status())) {
          checkTopologyId(response);
       }
@@ -71,7 +73,8 @@ public class HttpTransport implements Transport {
    private byte[] read(ServerConfiguration server, Object cacheName, Object key) {
       byte[] data = null;
 
-      FullHttpResponse response = (FullHttpResponse) operations.getRequest(topologyInfo, server, cacheName, key, MAX_CONTENT_LENGTH);
+      // FullHttpResponse response = (FullHttpResponse) operations.getRequest(topologyInfo, server, cacheName, key, MAX_CONTENT_LENGTH);
+      FullHttpResponse response = operations.getRequest(topologyInfo, cacheName, key);
 
       if (response != null && HttpResponseStatus.OK.equals(response.status())) {
          ByteBuf content = response.content();

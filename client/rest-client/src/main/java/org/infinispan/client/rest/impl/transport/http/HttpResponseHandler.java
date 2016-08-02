@@ -26,7 +26,7 @@ public class HttpResponseHandler extends SimpleChannelInboundHandler<HttpRespons
          this.response = msg;
       }
       ctx.close();
-   };
+   }
 
    @Override
    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {

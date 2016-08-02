@@ -58,6 +58,7 @@ public class HttpOperationsFactory {
          }
       });
       bootstrap.option(ChannelOption.SO_KEEPALIVE, true);
+      bootstrap.remoteAddress("127.0.0.1", 8080);
    }
    
    public void stop() {
@@ -74,7 +75,7 @@ public class HttpOperationsFactory {
       put.headers().add(TOPOLOGY_ID, topologyInfo.getTopologyId());
 
       HttpResponseHandler handler = new HttpResponseHandler();
-      Channel ch = bootstrap.connect(server.getHost(), Integer.valueOf(server.getPort())).awaitUninterruptibly().channel().pipeline()
+      Channel ch = bootstrap.connect().awaitUninterruptibly().channel().pipeline()
             .addLast(handler).channel();
       try {
          ch.writeAndFlush(put).sync().channel().closeFuture().sync();
