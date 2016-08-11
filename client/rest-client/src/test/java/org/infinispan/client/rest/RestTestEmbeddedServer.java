@@ -37,6 +37,7 @@ public class RestTestEmbeddedServer extends RestServerTestBase {
 
    private void setupClient() {
       mng = new RestCacheManager();
+      mng.start();
    }
 
    private void stopClient() {

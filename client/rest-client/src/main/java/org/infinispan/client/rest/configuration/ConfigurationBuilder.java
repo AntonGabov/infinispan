@@ -1,16 +1,14 @@
 package org.infinispan.client.rest.configuration;
 
-import java.lang.ref.WeakReference;
+import org.infinispan.client.rest.impl.transport.TransportFactory;
+import org.infinispan.commons.util.Util;
+
 import java.util.LinkedList;
 import java.util.List;
 
-import org.infinispan.client.rest.impl.transport.Transport;
-import org.infinispan.client.rest.impl.transport.http.HttpTransport;
-import org.infinispan.commons.util.Util;
-
 public class ConfigurationBuilder {
 
-   private Class<? extends Transport> transport = HttpTransport.class;
+   private Class transportFactory = TransportFactory.class;
    private List<ServerConfiguration> servers = new LinkedList<ServerConfiguration>(); 
    
    public ConfigurationBuilder() {
@@ -22,7 +20,7 @@ public class ConfigurationBuilder {
    }
    
    public ConfigurationBuilder transport(String transport) {
-      this.transport = Util.loadClass(transport, Thread.currentThread().getContextClassLoader());
+      this.transportFactory = Util.loadClass(transport, Thread.currentThread().getContextClassLoader());
       return this;
    }
    
@@ -30,6 +28,6 @@ public class ConfigurationBuilder {
       if (servers.isEmpty()) {
          addServer(ConfigurationProperties.DEFAULT_HOST, ConfigurationProperties.DEFAULT_PORT);
       }
-      return new Configuration(transport, servers);
+      return new Configuration(transportFactory, servers);
    }
 }

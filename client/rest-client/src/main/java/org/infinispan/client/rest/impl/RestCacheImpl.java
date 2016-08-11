@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit;
 import org.infinispan.client.rest.RestCacheManager;
 import org.infinispan.client.rest.api.RestCache;
 import org.infinispan.client.rest.impl.transport.Transport;
+import org.infinispan.client.rest.impl.transport.TransportFactory;
 import org.infinispan.commons.logging.Log;
 import org.infinispan.commons.logging.LogFactory;
 
@@ -21,21 +22,21 @@ public class RestCacheImpl<K, V> implements RestCache<K, V> {
 
    private final String name;
    private final RestCacheManager restCacheManager;
-   private final Transport transport;
+   private final TransportFactory transportFactory;
    private long defaultLifespan;
    private long defaultMaxIdleTime;
 
-   public RestCacheImpl(RestCacheManager rcm, Transport transport, String name) {
-      this(rcm, name, transport, 0, 0);
+   public RestCacheImpl(RestCacheManager rcm, TransportFactory transportFactory, String name) {
+      this(rcm, name, transportFactory, 0, 0);
    }
 
-   public RestCacheImpl(RestCacheManager rcm, String name, Transport transport, long defaultLifespan, long defaultMaxIdleTime) {
+   public RestCacheImpl(RestCacheManager rcm, String name, TransportFactory transportFactory, long defaultLifespan, long defaultMaxIdleTime) {
 //      if (trace) {
 //         log.tracef("Creating rest cache: %s", name);
 //      }
       this.name = name;
       this.restCacheManager = rcm;
-      this.transport = transport;
+      this.transportFactory = transportFactory;
       this.defaultLifespan = defaultLifespan;
       this.defaultMaxIdleTime = defaultMaxIdleTime;
    }
@@ -82,7 +83,7 @@ public class RestCacheImpl<K, V> implements RestCache<K, V> {
 
    @Override
    public V put(K key, V value, long lifespan, TimeUnit lifespanUnit, long maxIdleTime, TimeUnit maxIdleTimeUnit) {
-      transport.write(name, key, value);
+      transportFactory.getTransport().write(name, key, value);
       return value;
    }
 
@@ -248,7 +249,7 @@ public class RestCacheImpl<K, V> implements RestCache<K, V> {
 
    @Override
    public V get(Object key) {
-      return (V) transport.read(name, key);
+      return (V) transportFactory.getTransport().read(name, key);
    }
 
    @Override

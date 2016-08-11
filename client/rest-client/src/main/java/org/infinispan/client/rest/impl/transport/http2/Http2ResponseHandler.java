@@ -3,12 +3,13 @@ package org.infinispan.client.rest.impl.transport.http2;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http2.HttpConversionUtil;
 
 import java.util.Map;
 import java.util.TreeMap;
 
-public class Http2ResponseHandler extends SimpleChannelInboundHandler<FullHttpResponse> {
+public class Http2ResponseHandler extends SimpleChannelInboundHandler<HttpResponse> {
 
    private Map<Integer, FullHttpResponse> streamIdMap;
 
@@ -26,8 +27,11 @@ public class Http2ResponseHandler extends SimpleChannelInboundHandler<FullHttpRe
    }
 
    @Override
-   protected void channelRead0(ChannelHandlerContext ctx, FullHttpResponse response) throws Exception {
+   protected void channelRead0(ChannelHandlerContext ctx, HttpResponse response) throws Exception {
       Integer streamId = response.headers().getInt(HttpConversionUtil.ExtensionHeaderNames.STREAM_ID.text());
-      streamIdMap.put(streamId, response);
+      if (streamId == null) {
+         return;
+      }
+      streamIdMap.put(streamId, (FullHttpResponse)response);
    }
 }

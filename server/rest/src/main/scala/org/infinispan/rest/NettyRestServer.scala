@@ -14,9 +14,11 @@ import org.infinispan.manager.{DefaultCacheManager, EmbeddedCacheManager}
 import org.infinispan.registry.InternalCacheRegistry
 import org.infinispan.remoting.transport.Address
 import org.infinispan.rest.configuration.RestServerConfiguration
-import org.infinispan.rest.listeners.{TopologyChangedListener, ViewChangedListener}
+import org.infinispan.rest.http2.Http2NettyServer
+import org.infinispan.rest.listeners.ViewChangedListener
 import org.infinispan.rest.logging.{Log, RestAccessLoggingHandler}
 import org.infinispan.server.core.CacheIgnoreAware
+import org.jboss.resteasy.plugins.server.embedded.EmbeddedJaxrsServer
 import org.jboss.resteasy.plugins.server.netty.NettyJaxrsServer
 import org.jboss.resteasy.spi.ResteasyDeployment
 
@@ -24,7 +26,7 @@ import scala.collection.JavaConversions._
 
 final class NettyRestServer (
       val cacheManager: EmbeddedCacheManager, val configuration: RestServerConfiguration,
-      netty: NettyJaxrsServer, onStop: EmbeddedCacheManager => Unit) extends Lifecycle with Log with CacheIgnoreAware {
+      netty: EmbeddedJaxrsServer, onStop: EmbeddedCacheManager => Unit) extends Lifecycle with Log with CacheIgnoreAware {
 
    private val TOPOLOGY_CACHE_NAME: String = "___restTopologyCache"
    private var addressCache: Cache[Address, String] = null
@@ -37,6 +39,10 @@ final class NettyRestServer (
       configuration.getIgnoredCaches.foreach(ignoreCache)
       val restCacheManager = new RestCacheManager(cacheManager, isCacheIgnored)
       val server = new Server(configuration, restCacheManager, addressCache)
+      // this is for HTTP2
+//      deployment.getRegistry.addSingletonResource(server)
+//      deployment.getProviderFactory.register(new RestAccessLoggingHandler, classOf[ContainerResponseFilter],
+//         classOf[ContainerRequestFilter])
       deployment.getRegistry.addSingletonResource(server)
       deployment.getProviderFactory.register(new RestAccessLoggingHandler, classOf[ContainerResponseFilter],
          classOf[ContainerRequestFilter])
@@ -126,6 +132,11 @@ object NettyRestServer extends Log {
       netty.setPort(config.port())
       netty.setRootResourcePath("")
       netty.setSecurityDomain(null)
+
+      // THIS IS FOR HTTP2 Server
+//      val netty = new Http2NettyServer()
+//      netty.setHost(config.host())
+//      netty.setPort(String.valueOf(config.port()))
       new NettyRestServer(cm, config, netty, onStop)
    }
 

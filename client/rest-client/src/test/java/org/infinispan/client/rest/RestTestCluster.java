@@ -20,7 +20,8 @@ import static org.testng.AssertJUnit.assertTrue;
 public class RestTestCluster extends RestServerTestBase {
 
    private static final String DEFAULT_CACHE_NAME = "default";
-   private static RestCacheManager mng;
+   private static RestCacheManager mng1;
+   private static RestCacheManager mng2;
 
    @BeforeClass
    public void setup() throws Exception {
@@ -36,21 +37,29 @@ public class RestTestCluster extends RestServerTestBase {
       TestingUtil.blockUntilViewsReceived(10000, getCacheManager("1").getCache(DEFAULT_CACHE_NAME),
               getCacheManager("2").getCache(DEFAULT_CACHE_NAME));
 
-      setupClient();
+      setupClients();
    }
 
    @AfterClass
    public void finish() throws Exception {
       stopServers();
-      stopClient();
+      stopClients();
    }
 
-   private void setupClient() {
-      mng = new RestCacheManager();
+   private void setupClients() {
+      mng1 = new RestCacheManager();
+      org.infinispan.client.rest.configuration.ConfigurationBuilder builder = new org.infinispan.client.rest.configuration.ConfigurationBuilder();
+      builder.addServer("127.0.0.1", "8181");
+      mng2 = new RestCacheManager();
+      mng2.defineConfiguration(builder.create());
+
+      mng1.start();
+      mng2.start();
    }
 
-   private void stopClient() {
-      mng.stop();
+   private void stopClients() {
+      mng1.stop();
+      mng2.stop();
    }
 
    public void test2nodeCluster() throws Exception {
@@ -59,10 +68,10 @@ public class RestTestCluster extends RestServerTestBase {
       String value1 = "Cool";
       String value2 = "Story";
 
-      mng.getCache().put(key1, value1);
-      mng.getCache().put(key2, value2);
+      mng1.getCache().put(key1, value1);
+      mng1.getCache().put(key2, value2);
 
-      assertTrue(value1.equals((String) mng.getCache().get(key1)));
-      assertTrue(value2.equals((String) mng.getCache().get(key2)));
+      assertTrue(value1.equals((String) mng2.getCache().get(key1)));
+      assertTrue(value2.equals((String) mng2.getCache().get(key2)));
    }
 }

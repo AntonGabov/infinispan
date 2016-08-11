@@ -5,16 +5,16 @@ import java.util.List;
 import org.infinispan.client.rest.impl.transport.Transport;
 
 public class Configuration {
-   private Class<? extends Transport> transport;
+   private Class transportFactory;
    private List<ServerConfiguration> servers;
    
-   public Configuration(Class<? extends Transport> transport, List<ServerConfiguration> servers) {
-      this.transport = transport;
+   public Configuration(Class transportFactory, List<ServerConfiguration> servers) {
+      this.transportFactory = transportFactory;
       this.servers = servers;
    }
    
-   public Class<? extends Transport> transport() {
-      return transport;
+   public Class transportFactory() {
+      return transportFactory;
    }
    
    public List<ServerConfiguration> servers() {

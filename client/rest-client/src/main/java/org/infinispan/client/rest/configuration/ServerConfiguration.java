@@ -17,4 +17,21 @@ public class ServerConfiguration {
    public String getPort() {
       return port;
    }
+
+   @Override
+   public String toString() {
+      return host + ":" + port;
+   }
+
+   @Override
+   public boolean equals(Object server) {
+      boolean isEqual = false;
+      if (server instanceof ServerConfiguration &&
+            this.host.equals(((ServerConfiguration) server).getHost()) &&
+            this.port.equals(((ServerConfiguration) server).getPort())) {
+         isEqual = true;
+      }
+
+      return isEqual;
+   }
 }
