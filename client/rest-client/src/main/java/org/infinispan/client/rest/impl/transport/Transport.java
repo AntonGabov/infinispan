@@ -8,24 +8,22 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.util.concurrent.Promise;
 import org.infinispan.client.rest.configuration.ServerConfiguration;
 import org.infinispan.client.rest.impl.protocol.HttpHeaderNames;
 import org.infinispan.client.rest.impl.transport.http.HttpResponseHandler;
 import org.infinispan.client.rest.impl.transport.http2.Http2ResponseHandler;
 import org.infinispan.client.rest.marshall.MarshallUtil;
-import org.infinispan.client.rest.operations.OperationsConstants;
 import org.infinispan.client.rest.operations.OperationsFactory;
 import org.infinispan.client.rest.operations.http.HttpOperationsFactory;
 import org.infinispan.client.rest.operations.http2.Http2OperationsFactory;
 
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.SynchronousQueue;
 
-import static org.infinispan.client.rest.operations.OperationsConstants.*;
+import static org.infinispan.client.rest.operations.OperationsConstants.OperationType;
 
 public abstract class Transport {
 
@@ -38,7 +36,6 @@ public abstract class Transport {
    protected OperationType type;
    protected TransportFactory transportFactory;
    protected OperationsFactory operationsFactory;
-   protected SynchronousQueue<Promise> syncRequests = new SynchronousQueue<>();
 
    /**
     * Start a new transport with attempt to establish HTTP2 connection.
@@ -68,8 +65,8 @@ public abstract class Transport {
       bootstrap.remoteAddress(server.getHost(), Integer.valueOf(server.getPort()));
       beforeConnect();
       channel = bootstrap.connect().syncUninterruptibly().channel();
-      afterConnect();
       setupOperationsFactory();
+      afterConnect();
    }
 
    /**
@@ -85,10 +82,10 @@ public abstract class Transport {
    private void setupOperationsFactory() {
       switch (type) {
          case HTTP_2:
-            this.operationsFactory = new Http2OperationsFactory(channel, syncRequests);
+            this.operationsFactory = new Http2OperationsFactory(channel, type);
             break;
          default:
-            this.operationsFactory = new HttpOperationsFactory(channel, syncRequests);
+            this.operationsFactory = new HttpOperationsFactory(channel, type);
             break;
       }
    }
@@ -106,7 +103,9 @@ public abstract class Transport {
       switch (this.type) {
          case HTTP_1:
             channel.pipeline().remove(Http2ResponseHandler.class.getName());
-            channel.pipeline().addLast(HttpResponseHandler.class.getName(), new HttpResponseHandler(syncRequests));
+            channel.pipeline().addLast(HttpObjectAggregator.class.getName(), new HttpObjectAggregator(TransportConstants.MAX_CONTENT_LENGTH));
+            channel.pipeline().addLast(HttpResponseHandler.class.getName(), new HttpResponseHandler());
+            setupOperationsFactory();
             break;
       }
    }
@@ -149,6 +148,10 @@ public abstract class Transport {
       return data != null ? MarshallUtil.byteArray2Object(data) : null;
    }
 
+   /**
+    * TopologyId represents as "Topology: №; host1:port1, host2:port2, host3:port3"
+    * @param response
+     */
    protected void checkTopologyId(HttpResponse response) {
       String retrievedTopologyInfo = response.headers().getAsString(HttpHeaderNames.TOPOLOGY_ID);
       if (retrievedTopologyInfo == null) {

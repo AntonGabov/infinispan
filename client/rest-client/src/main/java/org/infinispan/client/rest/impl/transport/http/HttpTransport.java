@@ -18,7 +18,7 @@ public class HttpTransport extends Transport {
          protected void initChannel(SocketChannel ch) {
             ch.pipeline().addLast(HttpClientCodec.class.getName(), new HttpClientCodec());
             ch.pipeline().addLast(HttpObjectAggregator.class.getName(), new HttpObjectAggregator(TransportConstants.MAX_CONTENT_LENGTH));
-            ch.pipeline().addLast(HttpResponseHandler.class.getName(), new HttpResponseHandler(syncRequests));
+            ch.pipeline().addLast(HttpResponseHandler.class.getName(), new HttpResponseHandler());
          }
       });
    }
@@ -26,12 +26,5 @@ public class HttpTransport extends Transport {
    @Override
    protected void afterConnect() {
    }
-
-//   @Override
-//   protected void setupOperationsFactory() {
-//      if (OperationsConstants.OperationType.HTTP_1.equals(type)) {
-//         super.operationsFactory = new org.infinispan.client.rest.operations.http.HttpOperationsFactory(channel);
-//      }
-//   }
 
 }

@@ -26,27 +26,32 @@ import scala.collection.JavaConversions._
 
 final class NettyRestServer (
       val cacheManager: EmbeddedCacheManager, val configuration: RestServerConfiguration,
-      netty: EmbeddedJaxrsServer, onStop: EmbeddedCacheManager => Unit) extends Lifecycle with Log with CacheIgnoreAware {
+      netty: EmbeddedJaxrsServer, onStop: EmbeddedCacheManager => Unit, isNeedToStartHttp2: Boolean)
+      extends Lifecycle with Log with CacheIgnoreAware {
 
    private val TOPOLOGY_CACHE_NAME: String = "___restTopologyCache"
    private var addressCache: Cache[Address, String] = null
    private var viewChangedListener: ViewChangedListener = null
 
    override def start(): Unit = {
-      netty.start()
       startListeners()
-      val deployment = netty.getDeployment
       configuration.getIgnoredCaches.foreach(ignoreCache)
       val restCacheManager = new RestCacheManager(cacheManager, isCacheIgnored)
-      val server = new Server(configuration, restCacheManager, addressCache)
-      // this is for HTTP2
-//      deployment.getRegistry.addSingletonResource(server)
-//      deployment.getProviderFactory.register(new RestAccessLoggingHandler, classOf[ContainerResponseFilter],
-//         classOf[ContainerRequestFilter])
-      deployment.getRegistry.addSingletonResource(server)
-      deployment.getProviderFactory.register(new RestAccessLoggingHandler, classOf[ContainerResponseFilter],
-         classOf[ContainerRequestFilter])
-      logStartRestServer(configuration.host(), configuration.port())
+
+      if (isNeedToStartHttp2) {
+         netty.asInstanceOf[Http2NettyServer].setRestCacheManager(restCacheManager)
+         netty.asInstanceOf[Http2NettyServer].setServerConfiguration(configuration)
+         netty.asInstanceOf[Http2NettyServer].setAddressCache(addressCache)
+         netty.start()
+      } else {
+         netty.start()
+         val deployment = netty.getDeployment
+         val server = new Server(configuration, restCacheManager, addressCache)
+         deployment.getRegistry.addSingletonResource(server)
+         deployment.getProviderFactory.register(new RestAccessLoggingHandler, classOf[ContainerResponseFilter],
+            classOf[ContainerRequestFilter])
+         logStartRestServer(configuration.host(), configuration.port())
+      }
    }
 
    override def stop(): Unit = {
@@ -108,6 +113,8 @@ final class NettyRestServer (
 
 object NettyRestServer extends Log {
 
+   val IS_NEED_TO_START_HTTP2: Boolean = true
+
    def apply(config: RestServerConfiguration): NettyRestServer = {
       NettyRestServer(config, new DefaultCacheManager(), cm => cm.stop())
    }
@@ -125,19 +132,25 @@ object NettyRestServer extends Log {
       // Start caches first, if not started
       startCaches(cm)
 
-      val netty = new NettyJaxrsServer()
+      var netty: EmbeddedJaxrsServer = null
       val deployment = new ResteasyDeployment()
+      if (IS_NEED_TO_START_HTTP2) {
+         netty = new Http2NettyServer()
+         netty.asInstanceOf[Http2NettyServer].setHostname(config.host())
+         netty.asInstanceOf[Http2NettyServer].setPort(config.port())
+         netty.asInstanceOf[Http2NettyServer].setCacheManager(cm)
+     } else {
+         netty = new NettyJaxrsServer()
+         netty.asInstanceOf[NettyJaxrsServer].setHostname(config.host())
+         netty.asInstanceOf[NettyJaxrsServer].setPort(config.port())
+      }
       netty.setDeployment(deployment)
-      netty.setHostname(config.host())
-      netty.setPort(config.port())
       netty.setRootResourcePath("")
       netty.setSecurityDomain(null)
-
       // THIS IS FOR HTTP2 Server
-//      val netty = new Http2NettyServer()
-//      netty.setHost(config.host())
-//      netty.setPort(String.valueOf(config.port()))
-      new NettyRestServer(cm, config, netty, onStop)
+      //val netty = new NettyJaxrsServer()
+
+      new NettyRestServer(cm, config, netty, onStop, IS_NEED_TO_START_HTTP2)
    }
 
    private def createCacheManager(cfgFile: String): EmbeddedCacheManager = {

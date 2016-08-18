@@ -4,19 +4,15 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.DefaultHttpRequest;
-import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpScheme;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http2.HttpConversionUtil;
-import io.netty.util.concurrent.Promise;
 import org.infinispan.client.rest.marshall.MarshallUtil;
+import org.infinispan.client.rest.operations.OperationsConstants.OperationType;
 import org.infinispan.client.rest.operations.OperationsFactory;
-
-import java.util.concurrent.SynchronousQueue;
 
 import static io.netty.handler.codec.http.HttpHeaderNames.*;
 import static org.infinispan.client.rest.impl.protocol.HttpHeaderNames.TOPOLOGY_ID;
@@ -25,8 +21,8 @@ public class Http2OperationsFactory extends OperationsFactory {
 
    private Integer streamId = 1;
 
-   public Http2OperationsFactory(Channel channel, SynchronousQueue<Promise> syncRequests) {
-      super(channel, syncRequests);
+   public Http2OperationsFactory(Channel channel, OperationType type) {
+      super(channel, type);
    }
 
    /**
@@ -55,7 +51,7 @@ public class Http2OperationsFactory extends OperationsFactory {
       put.headers().add(HOST, super.getHostAddress());
       put.headers().add(TOPOLOGY_ID, topologyId);
 
-      return super.executeRequest(put);
+      return super.executeSynchronousRequest(put);
    }
 
    @Override
@@ -71,6 +67,6 @@ public class Http2OperationsFactory extends OperationsFactory {
       get.headers().add(HOST, super.getHostAddress());
       get.headers().add(TOPOLOGY_ID, topologyId);
 
-      return super.executeRequest(get);
+      return super.executeSynchronousRequest(get);
    }
 }

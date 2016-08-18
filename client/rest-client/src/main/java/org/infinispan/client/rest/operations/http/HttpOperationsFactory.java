@@ -7,20 +7,18 @@ import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
-import io.netty.util.concurrent.Promise;
 import org.infinispan.client.rest.marshall.MarshallUtil;
+import org.infinispan.client.rest.operations.OperationsConstants.OperationType;
 import org.infinispan.client.rest.operations.OperationsFactory;
-
-import java.util.concurrent.SynchronousQueue;
 
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
 import static org.infinispan.client.rest.impl.protocol.HttpHeaderNames.TOPOLOGY_ID;
 
-public class HttpOperationsFactory extends OperationsFactory{
+public class HttpOperationsFactory extends OperationsFactory {
 
-   public HttpOperationsFactory(Channel channel, SynchronousQueue<Promise> syncRequests) {
-      super(channel, syncRequests);
+   public HttpOperationsFactory(Channel channel, OperationType type) {
+      super(channel, type);
    }
 
    @Override
@@ -33,7 +31,7 @@ public class HttpOperationsFactory extends OperationsFactory{
       put.headers().add(CONTENT_LENGTH, content.readableBytes());
       put.headers().add(TOPOLOGY_ID, topologyId);
 
-      return super.executeRequest(put);
+      return super.executeSynchronousRequest(put);
    }
 
    @Override
@@ -42,6 +40,6 @@ public class HttpOperationsFactory extends OperationsFactory{
       get.headers().add(CONTENT_TYPE, "application/octet-stream");
       get.headers().add(TOPOLOGY_ID, topologyId);
 
-      return executeRequest(get);
+      return executeSynchronousRequest(get);
    }
 }

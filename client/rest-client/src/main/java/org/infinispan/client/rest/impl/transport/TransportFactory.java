@@ -49,9 +49,9 @@ public class TransportFactory {
 
    private void startTransports() {
       initialServers.forEach(server -> {
-         Transport transport = new HttpTransport();
+         Transport transport = new Http2Transport();
          transports.put(server, transport);
-         transport.start(server, this, OperationsConstants.OperationType.HTTP_1);
+         transport.start(server, this, OperationsConstants.OperationType.HTTP_2);
       });
    }
 
