@@ -1,7 +1,5 @@
 package org.infinispan.client.rest;
 
-import static org.testng.AssertJUnit.assertTrue;
-
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.infinispan.rest.RestServerTestBase;
 import org.infinispan.rest.configuration.RestServerConfigurationBuilder;
@@ -9,6 +7,8 @@ import org.infinispan.test.fwk.TestCacheManagerFactory;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
+
+import static org.testng.AssertJUnit.assertEquals;
 
 @Test(testName = "rest.client.RestTestEmbeddedServer")
 public class RestTestEmbeddedServer extends RestServerTestBase {
@@ -44,7 +44,7 @@ public class RestTestEmbeddedServer extends RestServerTestBase {
       mng.stop();
    }
 
-   public void testGetAndPutRqsts() {
+   public void testGetAndPutRequests() {
       String key1 = "Test1";
       String key2 = "Test2";
       String value1 = "Cool";
@@ -53,7 +53,7 @@ public class RestTestEmbeddedServer extends RestServerTestBase {
       mng.getCache().put(key1, value1);
       mng.getCache().put(key2, value2);
 
-      assertTrue(value1.equals((String) mng.getCache().get(key1)));
-      assertTrue(value2.equals((String) mng.getCache().get(key2)));
+      assertEquals((String) mng.getCache().get(key1), value1);
+      assertEquals((String) mng.getCache().get(key2), value2);
    }
 }

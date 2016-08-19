@@ -266,8 +266,7 @@ public class RestCacheImpl<K, V> implements RestCache<K, V> {
 
    @Override
    public int size() {
-      // TODO: IMPLEMENT IT
-      return 0;
+      throw new UnsupportedOperationException("NOT YET IMPLEMENTED");
    }
 
    @Override

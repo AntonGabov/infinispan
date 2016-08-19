@@ -46,14 +46,8 @@ public class RestCacheManager implements RestCacheContainer {
    @Override
    public <K, V> RestCache<K, V> getCache(String cacheName) {
       synchronized (cacheContainer) {
-         RestCache<K, V> cache = null;
-         if (!cacheContainer.containsKey(cacheName)) {
-            cache = createCache(cacheName);
-            cacheContainer.put(cacheName, cache);
-         } else {
-            cache = (RestCache<K, V>) cacheContainer.get(cacheName);
-         }
-
+         RestCache<K, V> cache = (RestCache<K, V>)
+               cacheContainer.computeIfAbsent(cacheName, c -> createCache(cacheName));
          return cache;
       }
    }

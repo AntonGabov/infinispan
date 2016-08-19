@@ -1,0 +1,37 @@
+GSoC 2016 - Infinispan project
+
+Link to list of the commits:
+https://github.com/infinispan/infinispan/compare/AntonGabov:topologyId
+
+1. Work during GSoC:
+1.1. Smart Rest HTTP/2 client based on Netty.
+The core of the client is RestCacheManager, which manages RestCache instances. Each RestCache presents a cache instance in the server side. Also RestCacheManager starts the TransportFactory that creates Transport instance to initiate the connection between the client and the server. Tranport uses the OperationsFactory to perform requests to server.
+1.1.1. HTTP operations
+GET, PUT - supported
+DELETE, UPDATE - not yet supported
+1.1.2. Security
+Unfortunately, client is not able to work via HTTPS, only HTTP.
+1.1.3. Why a client is smart?
+Each client's request has a special header called "topology-id", which facilitates obtaining information about cluster. This information is topology id + list of the server addresses (hostname:port) in the cluster. If the server is standalone, the topology id will be '-1'.
+Take a look at this example. There is cluster with N servers. Its topology: topology id = M and server list = {host1:port1...hostN:portN}. Also the client knows the topology id (which is M) from the last request.
+So, when a new server is connected to the cluster, the topology id is increased by one => topology id = M + 1 and server list = {host1:port1...hostN+1:portN+1}.
+At some moment client want to get some value from cache and it performs request with specified header. The value of the header will be the previous topology id value because client doesn't know yet that the topology was changed.
+Then the request is passed to the server. Server gets this header, understands that client has old topology info and replies with new topology id and new server list.
+1.1.4. Protocol changing
+If the client cannot establish the HTTP/2 connection, it will use simple HTTP/1 protocol.
+
+1.2. Rest HTTP/2 server endpoint based on Netty.
+Previously, endpoint was able to handle HTTP/1 request via RestEasy library (it's an OpenSource project). Now the server can handle either HTTP/2 requests.
+Moreover, the server can form topology info to notify the client when topology is changed.
+
+2. Work after GSoC.
+Mandatory tasks:
+2.1. The most crucial task is implementation of SSL connection, including ALPN protocol for switching from HTTP/2 to HTTP/1.
+2.2. Provide more tests connected with cluster (adding server, stopping server, "split brain" situation).
+2.3. Implement DELETE, UPDATE http operations in the client + implement methods in the RestCacheImpl, which are related with these http operations.
+2.4. Implement Infinispan features in the client like idle time, lifespan of the cache.
+2.5. Hold stress tests of HTTP/1 and HTTP/2 connection + compare these protocols.
+2.6. Continuous improving HTTP/2 client (refactor the code, implement new features).
+Possible tasks:
+2.7. Use HTTP/2 feature "Server push" (it is similar to long polling requests) to change topology info in the client.
+2.8. To minimize time of client-server communication (networking hops) a client can perform request directly to the server, in which cache resides. It can be achieved if topology info is extended.
