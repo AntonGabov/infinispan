@@ -40,11 +40,11 @@ public class TransportFactory {
    }
 
    public void updateTopologyId(int retrievedTopologyId) {
-      topologyInfo.updateTopologyId(retrievedTopologyId);
+      topologyInfo = topologyInfo.updateTopologyId(retrievedTopologyId);
    }
 
    public void updateTopologyId(int retrievedTopologyId, Collection<ServerConfiguration> servers) {
-      topologyInfo.updateTopologyId(retrievedTopologyId, servers);
+      topologyInfo = topologyInfo.updateTopologyId(retrievedTopologyId, servers);
    }
 
    private void startTransports() {
