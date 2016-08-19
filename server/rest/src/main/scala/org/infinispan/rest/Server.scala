@@ -100,7 +100,7 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager, 
                 @PathParam("cacheKey") key: String,
                 @QueryParam("extended") extended: String,
                 @DefaultValue("") @HeaderParam("Cache-Control") cacheControl: String,
-                @HeaderParam("Topology-Id") topologyId: Int): Response = {
+                @HeaderParam("topology-id") topologyId: Int): Response = {
       protectCacheNotFound(request, useAsync) { (request, useAsync) =>
          manager.getInternalEntry(cacheName, key) match {
             case ice: InternalCacheEntry[String, V] => {
@@ -356,7 +356,7 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager, 
                 @HeaderParam("Content-Type") mediaType: String, data: Array[Byte],
                 @DefaultValue("-1") @HeaderParam("timeToLiveSeconds") ttl: Long,
                 @DefaultValue("-1") @HeaderParam("maxIdleTimeSeconds") idleTime: Long,
-                @HeaderParam("Topology-Id") topologyId: Int): Response = {
+                @HeaderParam("topology-id") topologyId: Int): Response = {
       protectCacheNotFound(request, useAsync) { (request, useAsync) =>
          val cache = manager.getCache(cacheName)
          if (request.getMethod == "POST" && cache.containsKey(key)) {
@@ -537,7 +537,7 @@ class Server(configuration: RestServerConfiguration, manager: RestCacheManager, 
    }
 
   /**
-    * Form topology info for HTTP header "Topology-Id" in the format: "Topology:id;host1:port1,host2:port2,..."
+    * Form topology info for HTTP header "topology-id" in the format: "Topology:id;host1:port1,host2:port2,..."
     *
     * @param topologyId
     * @return
@@ -564,7 +564,7 @@ object Server {
    val ApplicationXJavaSerializedObject = ApplicationXJavaSerializedObjectType.toString
    val TimeToLiveHeader = "timeToLiveSeconds"
    val MaxIdleTimeHeader = "maxIdleTimeSeconds"
-   val TopologyIdHeader = "Topology-Id"
+   val TopologyIdHeader = "topology-id"
 
    /**For dealing with binary entries in the cache */
    lazy val VariantList = Variant.VariantListBuilder.newInstance.mediaTypes(

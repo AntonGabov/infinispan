@@ -6,6 +6,8 @@ import org.infinispan.client.rest.configuration.Configuration;
 import org.infinispan.client.rest.configuration.ConfigurationBuilder;
 import org.infinispan.client.rest.impl.RestCacheImpl;
 import org.infinispan.client.rest.impl.transport.TransportFactory;
+import org.infinispan.commons.logging.Log;
+import org.infinispan.commons.logging.LogFactory;
 import org.infinispan.commons.util.Util;
 
 import java.util.HashMap;
@@ -13,7 +15,7 @@ import java.util.Map;
 
 public class RestCacheManager implements RestCacheContainer {
 
-   //private static final Log log = LogFactory.getLog(RestCacheManager.class);
+   private static final Log log = LogFactory.getLog(RestCacheManager.class);
    public static final String DEFAULT_CACHE_NAME = "default";
 
    protected TransportFactory transportFactory;
@@ -59,7 +61,7 @@ public class RestCacheManager implements RestCacheContainer {
    @Override
    public void start() {
       transportFactory.start(configuration);
-      //log.info("RestManager is started");
+      log.info("RestManager is started");
       isStarted = true;
    }
 
@@ -70,7 +72,7 @@ public class RestCacheManager implements RestCacheContainer {
       }
       transportFactory.stop();
       
-      //log.info("RestManager is stopped");
+      log.info("RestManager is stopped");
       isStarted = false;
    }
 

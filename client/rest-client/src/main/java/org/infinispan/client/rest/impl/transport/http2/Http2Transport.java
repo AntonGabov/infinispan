@@ -71,12 +71,8 @@ public class Http2Transport extends Transport {
          configureSimpleChannel(channel);
       }
 
-      /**
-       * NOT YET IMPLEMENTED!
-       * @param channel
-       */
       private void configureSecuredeChannel(SocketChannel channel) {
-         throw new UnsupportedOperationException("NOT YET IMPLEMENTED");
+         throw new UnsupportedOperationException("Not supported");
       }
 
       private void configureSimpleChannel(SocketChannel channel) {

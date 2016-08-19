@@ -27,7 +27,7 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
 public class Http2Handler extends Http2ConnectionHandler implements Http2FrameListener {
 
-   private static final String TOPOLOGY_HEADER = "Topology-Id";
+   private static final String TOPOLOGY_HEADER = "topology-id";
    /** The path is "/rest/{cacheName}/{cacheKey}" */
    private static final int MAX_ELEMENTS_IN_PATH = 3;
    private EmbeddedCacheManager cacheManager;
@@ -227,7 +227,8 @@ public class Http2Handler extends Http2ConnectionHandler implements Http2FrameLi
    }
 
    private void addTopologyIdHeader(Http2Headers headersRequest, Http2Headers headersResponse) {
-      String topologyIdAsString = (String) headersRequest.get(TOPOLOGY_HEADER);
+      String topologyIdAsString = headersRequest.get(TOPOLOGY_HEADER) == null ? null :
+            headersRequest.get(TOPOLOGY_HEADER).toString();
       if (topologyIdAsString == null) {
          return;
       }

@@ -17,8 +17,7 @@ import org.infinispan.commons.logging.LogFactory;
 
 public class RestCacheImpl<K, V> implements RestCache<K, V> {
 
-   //private static final Log log = LogFactory.getLog(RestCacheImpl.class, Log.class);
-   //private static final boolean trace = log.isTraceEnabled();
+   private static final Log log = LogFactory.getLog(RestCacheImpl.class, Log.class);
 
    private final String name;
    private final RestCacheManager restCacheManager;
@@ -31,9 +30,7 @@ public class RestCacheImpl<K, V> implements RestCache<K, V> {
    }
 
    public RestCacheImpl(RestCacheManager rcm, String name, TransportFactory transportFactory, long defaultLifespan, long defaultMaxIdleTime) {
-//      if (trace) {
-//         log.tracef("Creating rest cache: %s", name);
-//      }
+      log.info("Creating rest cache: " + name);
       this.name = name;
       this.restCacheManager = rcm;
       this.transportFactory = transportFactory;
@@ -280,16 +277,12 @@ public class RestCacheImpl<K, V> implements RestCache<K, V> {
 
    @Override
    public void start() {
-//      if (log.isDebugEnabled()) {
-//         log.debugf("Start called, nothing to do here(%s)", getName());
-//      }
+      log.info("Start the cache with name - " + name);
    }
 
    @Override
    public void stop() {
-//      if (log.isDebugEnabled()) {
-//         log.debugf("Stop called, nothing to do here(%s)", getName());
-//      }
+      log.info("Stop the cache with name - " + name);
    }
 
 }
