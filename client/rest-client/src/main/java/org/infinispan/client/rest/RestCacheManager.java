@@ -75,9 +75,7 @@ public class RestCacheManager implements RestCacheContainer {
    }
 
    /**
-    * 
     * Create a new instance of {@link org.infinispan.client.rest.impl.RestCacheImpl}
-    * 
     * @param cacheName
     * @return a cache instance
     */

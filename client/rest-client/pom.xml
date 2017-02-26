@@ -10,6 +10,14 @@
    <artifactId>infinispan-client-rest</artifactId>
    <name>Infinispan HTTP/2 REST Smart Client</name>
 
+   <properties>
+      <!--
+         Your version (id depends on your JAVA version) can be determined here:
+         http://www.eclipse.org/jetty/documentation/current/alpn-chapter.html#alpn-versions
+      -->
+      <alpn-boot-version>8.1.7.v20160121</alpn-boot-version>
+   </properties>
+
    <dependencies>
       <dependency>
          <groupId>org.infinispan</groupId>
@@ -49,6 +57,11 @@
          <groupId>io.netty</groupId>
          <artifactId>netty-all</artifactId>
       </dependency>
+      <dependency>
+         <groupId>org.mortbay.jetty.alpn</groupId>
+         <artifactId>alpn-boot</artifactId>
+         <version>${alpn-boot-version}</version>
+      </dependency>
    </dependencies>
    <build>
       <plugins>
@@ -59,6 +72,14 @@
             <configuration>
                <source>1.8</source>
                <target>1.8</target>
+            </configuration>
+         </plugin>
+         <plugin>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+               <argLine>
+                  -Xbootclasspath/p:${settings.localRepository}/org/mortbay/jetty/alpn/alpn-boot/${alpn-boot-version}/alpn-boot-${alpn-boot-version}.jar
+               </argLine>
             </configuration>
          </plugin>
       </plugins>

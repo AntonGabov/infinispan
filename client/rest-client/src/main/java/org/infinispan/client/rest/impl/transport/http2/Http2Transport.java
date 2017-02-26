@@ -17,6 +17,9 @@ import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.HttpToHttp2ConnectionHandler;
 import io.netty.handler.codec.http2.HttpToHttp2ConnectionHandlerBuilder;
 import io.netty.handler.codec.http2.InboundHttp2ToHttpAdapterBuilder;
+import io.netty.handler.ssl.ApplicationProtocolNames;
+import io.netty.handler.ssl.ApplicationProtocolNegotiationHandler;
+import io.netty.handler.ssl.SslHandler;
 import org.infinispan.client.rest.impl.transport.Transport;
 import org.infinispan.client.rest.operations.OperationsConstants;
 import org.infinispan.commons.logging.Log;
@@ -68,11 +71,29 @@ public class Http2Transport extends Transport {
 
          responseHandler = new Http2ResponseHandler();
          settingsHandler = new Http2SettingsHandler(channel.newPromise());
-         configureSimpleChannel(channel);
+         if (sslContext != null) {
+            configureSecuredChannel(channel);
+         } else {
+            configureSimpleChannel(channel);
+         }
       }
 
-      private void configureSecuredeChannel(SocketChannel channel) {
-         throw new UnsupportedOperationException("Not supported");
+      private void configureSecuredChannel(SocketChannel channel) {
+         ApplicationProtocolNegotiationHandler negotiationHandler = new ApplicationProtocolNegotiationHandler("") {
+            @Override
+            protected void configurePipeline(ChannelHandlerContext ctx, String protocol) throws Exception {
+               if (ApplicationProtocolNames.HTTP_2.equals(protocol)) {
+                  ctx.pipeline().addLast(connectionHandler);
+                  configureEndOfPipeline(ctx.pipeline());
+               } else {
+                  ctx.close();
+                  throw new IllegalStateException("Unknown protocol: " + protocol);
+               }
+            }
+         };
+
+         channel.pipeline().addLast(SslHandler.class.getName(), sslContext.newHandler(channel.alloc()));
+         channel.pipeline().addLast(ApplicationProtocolNegotiationHandler.class.getName(), negotiationHandler);
       }
 
       private void configureSimpleChannel(SocketChannel channel) {

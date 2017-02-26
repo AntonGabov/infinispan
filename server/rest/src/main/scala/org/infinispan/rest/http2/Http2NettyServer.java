@@ -19,9 +19,20 @@ import io.netty.handler.codec.http.HttpServerUpgradeHandler;
 import io.netty.handler.codec.http.HttpServerUpgradeHandler.UpgradeCodec;
 import io.netty.handler.codec.http.HttpServerUpgradeHandler.UpgradeCodecFactory;
 import io.netty.handler.codec.http2.Http2CodecUtil;
+import io.netty.handler.codec.http2.Http2SecurityUtil;
 import io.netty.handler.codec.http2.Http2ServerUpgradeCodec;
+import io.netty.handler.ssl.ApplicationProtocolConfig;
+import io.netty.handler.ssl.ApplicationProtocolNames;
+import io.netty.handler.ssl.OpenSsl;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
+import io.netty.handler.ssl.SupportedCipherSuiteFilter;
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.AsciiString;
 import org.infinispan.Cache;
+import org.infinispan.commons.logging.Log;
+import org.infinispan.commons.logging.LogFactory;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.infinispan.remoting.transport.Address;
 import org.infinispan.rest.RestCacheManager;
@@ -37,6 +48,7 @@ import org.jboss.resteasy.plugins.server.netty.RestEasyHttpRequestDecoder;
 import org.jboss.resteasy.plugins.server.netty.RestEasyHttpResponseEncoder;
 import org.jboss.resteasy.spi.ResteasyDeployment;
 
+import javax.net.ssl.SSLException;
 import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.container.ContainerResponseFilter;
 import java.util.Iterator;
@@ -48,16 +60,21 @@ import java.util.Map.Entry;
  */
 public class Http2NettyServer implements EmbeddedJaxrsServer {
 
-   private final int MAX_INCOMING_CONNECTIONS = 1024;
+   private static final Log log = LogFactory.getLog(Http2NettyServer.class);
 
+   // Variables to create connection
+   private final int MAX_INCOMING_CONNECTIONS = 1024;
    private String host = "127.0.0.1";
    private int port = 8080;
    private int executorThreadCount = 16;
    private int maxHttpContentLength = 16 * 1024;
    private ServerBootstrap bootstrap;
    private EventLoopGroup eventLoopGroup;
+   private SslContext sslContext;
    /** This executor is only fot HTTP1 connection */
    private EventLoopGroup eventExecutor;
+
+   // Additional variables for internal usage
    protected String root = "";
    protected ResteasyDeployment deployment = new ResteasyDeployment();
    protected SecurityDomain domain;
@@ -65,6 +82,7 @@ public class Http2NettyServer implements EmbeddedJaxrsServer {
    protected EmbeddedCacheManager cacheManager;
    protected RestCacheManager restCacheManager;
    protected Cache<Address, String> addressCache;
+   protected boolean isSsl = false;
 
    public String getHostname() {
       return host;
@@ -118,6 +136,10 @@ public class Http2NettyServer implements EmbeddedJaxrsServer {
       this.addressCache = addressCache;
    }
 
+   public void setSslAvailability(boolean isSsl) {
+      this.isSsl = isSsl;
+   }
+
    @Override
    public void start() {
       // Start usual Netty server
@@ -141,6 +163,25 @@ public class Http2NettyServer implements EmbeddedJaxrsServer {
       eventLoopGroup.shutdownGracefully();
       if (eventExecutor != null) {
          eventExecutor.shutdownGracefully();
+      }
+   }
+
+   private void configureSsl() {
+      SslProvider sslProvider = OpenSsl.isAlpnSupported() ? SslProvider.OPENSSL : SslProvider.JDK;
+      try {
+         sslContext = SslContextBuilder.forClient()
+                 .sslProvider(sslProvider)
+                 .ciphers(Http2SecurityUtil.CIPHERS, SupportedCipherSuiteFilter.INSTANCE)
+                 .trustManager(InsecureTrustManagerFactory.INSTANCE)
+                 .applicationProtocolConfig(new ApplicationProtocolConfig(
+                         ApplicationProtocolConfig.Protocol.ALPN,
+                         ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
+                         ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
+                         ApplicationProtocolNames.HTTP_2,
+                         ApplicationProtocolNames.HTTP_1_1))
+                 .build();
+      } catch (SSLException e) {
+         log.warn("Cannot create SSL configuration");
       }
    }
 
@@ -190,12 +231,6 @@ public class Http2NettyServer implements EmbeddedJaxrsServer {
             ctx.fireChannelRead(msg);
          }
 
-         protected void channelRead0(ChannelHandlerContext ctx, HttpMessage message) throws Exception {
-            removeCurrentHandlers(ctx);
-            addSpecifiedHandlers(ctx);
-            ctx.fireChannelRead(message);
-         }
-
          private void removeCurrentHandlers(ChannelHandlerContext ctx) {
             Iterator<Entry<String, ChannelHandler>> iterator = ctx.pipeline().iterator();
             while (iterator.hasNext()) {
@@ -211,6 +246,10 @@ public class Http2NettyServer implements EmbeddedJaxrsServer {
                   ContainerRequestFilter.class);
          }
 
+         /**
+          * These handlers are added to initiate RestEasy
+          * @param ctx
+           */
          private void addSpecifiedHandlers(ChannelHandlerContext ctx) {
             eventExecutor = new NioEventLoopGroup(executorThreadCount);
             final RequestDispatcher dispatcher = this.createRequestDispatcher();

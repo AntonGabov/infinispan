@@ -61,7 +61,7 @@ public abstract class OperationsFactory {
          log.info(request.method() + " synchronous request :" + request.uri());
 
          prepareRequestForExecution();
-         channel.writeAndFlush(request).syncUninterruptibly();
+         channel.writeAndFlush(request).addListeners();
          return getResponse();
       }
    }

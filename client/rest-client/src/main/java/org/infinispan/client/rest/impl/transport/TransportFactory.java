@@ -51,7 +51,7 @@ public class TransportFactory {
       initialServers.forEach(server -> {
          Transport transport = new Http2Transport();
          transports.put(server, transport);
-         transport.start(server, this, OperationsConstants.OperationType.HTTP_2);
+         transport.start(server, this, OperationsConstants.OperationType.HTTP_2, configuration.isSsl());
       });
    }
 

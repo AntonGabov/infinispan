@@ -3,14 +3,29 @@ package org.infinispan.client.rest.impl.transport;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http2.Http2SecurityUtil;
+import io.netty.handler.ssl.ApplicationProtocolConfig;
+import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;
+import io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
+import io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior;
+import io.netty.handler.ssl.ApplicationProtocolNames;
+import io.netty.handler.ssl.OpenSsl;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
+import io.netty.handler.ssl.SupportedCipherSuiteFilter;
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import org.infinispan.client.rest.configuration.ServerConfiguration;
 import org.infinispan.client.rest.impl.protocol.HttpHeaderNames;
 import org.infinispan.client.rest.impl.transport.http.HttpResponseHandler;
@@ -19,9 +34,14 @@ import org.infinispan.client.rest.marshall.MarshallUtil;
 import org.infinispan.client.rest.operations.OperationsFactory;
 import org.infinispan.client.rest.operations.http.HttpOperationsFactory;
 import org.infinispan.client.rest.operations.http2.Http2OperationsFactory;
+import org.infinispan.commons.logging.Log;
+import org.infinispan.commons.logging.LogFactory;
 
+import javax.net.ssl.SSLException;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import static org.infinispan.client.rest.operations.OperationsConstants.OperationType;
 
@@ -36,14 +56,17 @@ public abstract class Transport {
    protected OperationType type;
    protected TransportFactory transportFactory;
    protected OperationsFactory operationsFactory;
+   protected SslContext sslContext;
+
+   private static final Log log = LogFactory.getLog(Transport.class);
 
    /**
     * Start a new transport with attempt to establish HTTP2 connection.
     * @param server
     * @param transportFactory
      */
-   public void start(ServerConfiguration server, TransportFactory transportFactory) {
-      this.start(server, transportFactory, OperationType.HTTP_2);
+   public void start(ServerConfiguration server, TransportFactory transportFactory, boolean isSsl) {
+      this.start(server, transportFactory, OperationType.HTTP_2, isSsl);
    }
 
    /**
@@ -52,10 +75,14 @@ public abstract class Transport {
     * @param transportFactory
     * @param type
      */
-   public void start(ServerConfiguration server, TransportFactory transportFactory, OperationType type) {
+   public void start(ServerConfiguration server, TransportFactory transportFactory, OperationType type, boolean isSsl) {
       this.server = server;
       this.transportFactory = transportFactory;
       this.type = type;
+
+      if (isSsl) {
+         configureSsl();
+      }
 
       workerGroup = new NioEventLoopGroup();
       bootstrap = new Bootstrap()
@@ -67,6 +94,25 @@ public abstract class Transport {
       channel = bootstrap.connect().syncUninterruptibly().channel();
       setupOperationsFactory();
       afterConnect();
+   }
+
+   private void configureSsl() {
+      SslProvider sslProvider = OpenSsl.isAlpnSupported() ? SslProvider.OPENSSL : SslProvider.JDK;
+      try {
+         sslContext = SslContextBuilder.forClient()
+               .sslProvider(sslProvider)
+               .ciphers(Http2SecurityUtil.CIPHERS, SupportedCipherSuiteFilter.INSTANCE)
+               .trustManager(InsecureTrustManagerFactory.INSTANCE)
+               .applicationProtocolConfig(new ApplicationProtocolConfig(
+                     Protocol.ALPN,
+                     SelectorFailureBehavior.NO_ADVERTISE,
+                     SelectedListenerFailureBehavior.ACCEPT,
+                     ApplicationProtocolNames.HTTP_2,
+                     ApplicationProtocolNames.HTTP_1_1))
+               .build();
+      } catch (SSLException e) {
+         log.warn("Cannot create SSL configuration");
+      }
    }
 
    /**
@@ -102,11 +148,19 @@ public abstract class Transport {
       this.type = type;
       switch (this.type) {
          case HTTP_1:
-            channel.pipeline().remove(Http2ResponseHandler.class.getName());
+            removeCurrentHandlers(channel.pipeline());
+            channel.pipeline().addLast(HttpClientCodec.class.getName(), new HttpClientCodec());
             channel.pipeline().addLast(HttpObjectAggregator.class.getName(), new HttpObjectAggregator(TransportConstants.MAX_CONTENT_LENGTH));
             channel.pipeline().addLast(HttpResponseHandler.class.getName(), new HttpResponseHandler());
             setupOperationsFactory();
             break;
+      }
+   }
+
+   private void removeCurrentHandlers(ChannelPipeline pipeline) {
+      Iterator<Map.Entry<String, ChannelHandler>> iterator = pipeline.iterator();
+      while (iterator.hasNext()) {
+         pipeline.remove(iterator.next().getValue());
       }
    }
 
